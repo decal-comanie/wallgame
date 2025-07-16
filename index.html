@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>벽바둑</title>
+    <style>
+      body {
+        font-family: "맑은 고딕", sans-serif;
+        text-align: center;
+        background-color: #f9f9f9;
+      }
+      #mode-select button {
+        margin: 5px;
+        padding: 10px 15px;
+        font-weight: bold;
+      }
+      #controls {
+        margin: 15px;
+      }
+      .player-btn {
+        padding: 10px 15px;
+        margin: 0 5px;
+        font-weight: bold;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: white;
+      }
+      .red {
+        background: red;
+      }
+      .blue {
+        background: blue;
+      }
+      .yellow {
+        background: gold;
+      }
+      .green {
+        background: green;
+      }
+      .breaker-btn {
+        background: #555;
+        color: white;
+        font-weight: bold;
+        padding: 6px 10px;
+        margin-left: 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #board {
+        display: grid;
+        grid-template-columns: repeat(6, 50px 10px) 50px;
+        grid-template-rows: repeat(6, 50px 10px) 50px;
+        margin: 0 auto;
+        width: max-content;
+        background: #ddd;
+        padding: 10px;
+        border-radius: 12px;
+        user-select: none;
+      }
+      .cell {
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+      }
+      .stone-cell {
+        background-color: white;
+        border: 1.5px solid #bbb;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stone {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+      }
+      .highlight {
+        background-color: rgba(51, 153, 255, 0.3) !important;
+      }
+      .breaker-highlight {
+        background-color: rgba(255, 0, 0, 0.3) !important;
+      }
+      .h-wall-cell,
+      .v-wall-cell {
+        background-color: white;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+      }
+      .empty-cell {
+        background-color: #444;
+        border-radius: 6px;
+        cursor: default;
+      }
+      #status-message {
+        margin-top: 10px;
+        font-weight: bold;
+        font-size: 1.1em;
+        color: #333;
+        min-height: 1.4em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>벽바둑</h2>
+
+    <div id="mode-select">
+      <h3>인원 수를 선택하세요</h3>
+      <button onclick="startGame(2)">2인 게임</button>
+      <button onclick="startGame(3)">3인 게임</button>
+      <button onclick="startGame(4)">4인 게임</button>
+    </div>
+
+    <div id="game-ui" style="display: none">
+      <div id="controls">
+        <button class="player-btn red" onclick="selectPlayer('red')">
+          빨강
+        </button>
+        <button class="player-btn blue" onclick="selectPlayer('blue')">
+          파랑
+        </button>
+        <button class="player-btn yellow" onclick="selectPlayer('yellow')">
+          노랑
+        </button>
+        <button class="player-btn green" onclick="selectPlayer('green')">
+          초록
+        </button>
+        <button
+          id="breaker-btn"
+          class="breaker-btn"
+          onclick="activateBreaker()"
+        >
+          벽 부수기
+        </button>
+      </div>
+      <div id="board"></div>
+      <div id="status-message"></div>
+    </div>
+
+    <script>
+      const board = document.getElementById("board");
+      const statusMessage = document.getElementById("status-message");
+      const SIZE = 13;
+      let selectedPlayerCount = 2;
+      let currentPlayer = "red";
+      const playerColors = ["red", "blue", "yellow", "green"];
+      const playerStones = { red: [], blue: [], yellow: [], green: [] };
+      let selectedStone = null;
+      let placementQueue = [];
+      let isPlacing = true;
+      let phase = "placement"; // placement, move, wall
+      let movablePositions = new Set();
+
+      const colorNames = {
+        red: "빨강",
+        blue: "파랑",
+        yellow: "노랑",
+        green: "초록",
+      };
+
+      function getCell(r, c) {
+        return board.children[r * SIZE + c];
+      }
+
+      function getMaxPieces(color) {
+        return selectedPlayerCount === 2 ? 4 : 2;
+      }
+
+      function startGame(count) {
+        selectedPlayerCount = count;
+        document.getElementById("mode-select").style.display = "none";
+        document.getElementById("game-ui").style.display = "block";
+
+        const colors = playerColors.slice(0, selectedPlayerCount);
+        document.querySelectorAll(".player-btn").forEach((btn) => {
+          const color = btn.classList[1];
+          btn.style.display = colors.includes(color) ? "inline-block" : "none";
+        });
+
+        generateBoard();
+
+        // 2인 초기 돌 배치
+        if (count === 2) {
+          const initial = {
+            red: ["2,2", "4,4"],
+            blue: ["2,4", "4,2"],
+          };
+          for (const color in initial) {
+            initial[color].forEach((pos) => {
+              const [r, c] = pos.split(",").map(Number);
+              const cell = getCell(r * 2, c * 2);
+              const stone = document.createElement("div");
+              stone.classList.add("stone");
+              stone.style.backgroundColor = color;
+              cell.appendChild(stone);
+              playerStones[color].push(`${r * 2},${c * 2}`);
+            });
+          }
+        }
+
+        setupPlacementQueue();
+        currentPlayer = placementQueue.shift();
+        statusMessage.innerText = `말 배치: ${colorNames[currentPlayer]}님`;
+        phase = "placement";
+      }
+
+      function setupPlacementQueue() {
+        const colors = playerColors.slice(0, selectedPlayerCount);
+        placementQueue = [...colors, ...colors.slice().reverse()];
+      }
+
+      function nextPlacementTurn() {
+        if (placementQueue.length === 0) {
+          isPlacing = false;
+          phase = "move";
+          statusMessage.innerText = `${colorNames[currentPlayer]}님의 턴입니다. 말을 선택하세요.`;
+          return;
+        }
+        currentPlayer = placementQueue.shift();
+        statusMessage.innerText = `말 배치: ${colorNames[currentPlayer]}님`;
+      }
+
+      function selectPlayer(color) {
+        if (!isPlacing) {
+          currentPlayer = color;
+          statusMessage.innerText = `${colorNames[currentPlayer]}님의 턴입니다. 말을 선택하세요.`;
+          clearHighlights();
+          selectedStone = null;
+          movablePositions.clear();
+        }
+      }
+
+      function onStoneClick(cell, r, c) {
+        const stone = cell.querySelector(".stone");
+        const key = `${r},${c}`;
+
+        if (breakerMode) {
+          if (stone && stone.style.backgroundColor === currentPlayer) {
+            breakerSource = { r, c };
+            highlightBreakerTargets(r, c);
+            statusMessage.innerText = `${colorNames[currentPlayer]}님, 부술 벽을 선택하세요.`;
+          }
+          return;
+        }
+
+        // 벽 설치 단계일 때 벽 칸 클릭 처리
+        if (
+          phase === "wall" &&
+          (cell.classList.contains("h-wall-cell") ||
+            cell.classList.contains("v-wall-cell"))
+        ) {
+          if (cell.style.backgroundColor === "white") {
+            // 벽 설치 가능 칸이면 설치
+            toggleWall(cell);
+            phase = "move";
+            nextTurn();
+          }
+          return;
+        }
+
+        if (r % 2 === 1 || c % 2 === 1) return;
+
+        if (phase === "placement") {
+          if (
+            !stone &&
+            playerStones[currentPlayer].length < getMaxPieces(currentPlayer)
+          ) {
+            const newStone = document.createElement("div");
+            newStone.classList.add("stone");
+            newStone.style.backgroundColor = currentPlayer;
+            cell.appendChild(newStone);
+            playerStones[currentPlayer].push(key);
+            nextPlacementTurn();
+          }
+          return;
+        }
+
+        if (phase === "move") {
+          // 하이라이트된 곳 클릭 시 이동(자기자리 포함)
+          if (movablePositions.has(key)) {
+            moveStoneTo(r, c);
+
+            return;
+          }
+
+          // 본인 돌 선택
+          if (stone && stone.style.backgroundColor === currentPlayer) {
+            // 이동 가능 위치 계산 (자기자리 포함)
+            const possibleMoves = getMovablePositions(r, c);
+            // 자기자리만 가능하면 이동 불가 처리
+            if (
+              possibleMoves.size === 1 && // 자기자리만 있음
+              possibleMoves.has(key)
+            ) {
+              statusMessage.innerText = `${colorNames[currentPlayer]}님, 선택한 말은 이동할 수 없습니다. 다른 말을 선택하세요.`;
+              clearHighlights();
+              selectedStone = null;
+              movablePositions.clear();
+              return;
+            }
+            // 이동 가능 칸 2개 이상이면 하이라이트 표시
+            selectedStone = { r, c };
+            movablePositions = possibleMoves;
+            clearHighlights();
+            movablePositions.forEach((pos) => {
+              const [rr, cc] = pos.split(",");
+              const cell = getCell(Number(rr), Number(cc));
+              cell.classList.add("highlight");
+            });
+            statusMessage.innerText = `${colorNames[currentPlayer]}님, 이동할 위치를 선택하세요.`;
+
+            return;
+          }
+        }
+      }
+
+      function toggleWall(cell) {
+        cell.style.backgroundColor = currentPlayer;
+        clearHighlights();
+      }
+
+      function isWallBetween(r1, c1, r2, c2) {
+        const wallR = (r1 + r2) / 2;
+        const wallC = (c1 + c2) / 2;
+        const wall = getCell(wallR, wallC);
+        return (
+          wall &&
+          wall.style.backgroundColor !== "" &&
+          wall.style.backgroundColor !== "white"
+        );
+      }
+
+      function getMovablePositions(r, c) {
+        const visited = new Set();
+        const queue = [{ r, c, dist: 0 }];
+        visited.add(`${r},${c}`);
+
+        while (queue.length && visited.size < 13) {
+          const { r: cr, c: cc, dist } = queue.shift();
+          if (dist >= 2) continue;
+
+          const steps = [
+            [cr - 2, cc],
+            [cr + 2, cc],
+            [cr, cc - 2],
+            [cr, cc + 2],
+          ];
+
+          for (const [nr, nc] of steps) {
+            if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+            if (visited.has(`${nr},${nc}`)) continue;
+            if (isWallBetween(cr, cc, nr, nc)) continue;
+
+            const cell = getCell(nr, nc);
+            if (
+              cell &&
+              cell.classList.contains("stone-cell") &&
+              !cell.querySelector(".stone")
+            ) {
+              visited.add(`${nr},${nc}`);
+              queue.push({ r: nr, c: nc, dist: dist + 1 });
+            }
+          }
+        }
+
+        return visited;
+      }
+
+      function moveStoneTo(r, c) {
+        if (!selectedStone) return;
+        const prevCell = getCell(selectedStone.r, selectedStone.c);
+        const stone = prevCell.querySelector(".stone");
+        if (!stone) return;
+
+        const targetCell = getCell(r, c);
+
+        // 타겟 칸이 벽 칸이면 이동 불가
+        if (
+          targetCell.classList.contains("h-wall-cell") ||
+          targetCell.classList.contains("v-wall-cell")
+        )
+          return;
+
+        // 타겟 칸에 돌이 있으면 이동 불가
+        // if (targetCell.querySelector(".stone")) return;
+
+        if (
+          targetCell.querySelector(".stone") &&
+          !(r === selectedStone.r && c === selectedStone.c)
+        )
+          return;
+
+        targetCell.appendChild(stone);
+
+        // 좌표 업데이트
+        playerStones[currentPlayer] = playerStones[currentPlayer].map((p) =>
+          p === `${selectedStone.r},${selectedStone.c}` ? `${r},${c}` : p
+        );
+
+        clearHighlights();
+        selectedStone = null;
+        phase = "wall";
+        highlightWallPlacementCandidates(r, c);
+        statusMessage.innerText = `${colorNames[currentPlayer]}님, 벽을 설치할 위치를 선택하세요.`;
+      }
+
+      function highlightWallPlacementCandidates(r, c) {
+        const directions = [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ];
+        directions.forEach(([dr, dc]) => {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) return;
+          const cell = getCell(nr, nc);
+          if (
+            (cell.classList.contains("h-wall-cell") ||
+              cell.classList.contains("v-wall-cell")) &&
+            cell.style.backgroundColor === "white"
+          ) {
+            cell.classList.add("highlight");
+          }
+        });
+      }
+
+      // 기존 clearHighlights에 breaker-highlight 제거 추가
+      function clearHighlights() {
+        board
+          .querySelectorAll(".highlight, .breaker-highlight")
+          .forEach((cell) => {
+            cell.classList.remove("highlight", "breaker-highlight");
+            cell.onclick = null;
+          });
+      }
+
+      // nextTurn 시 breaker 버튼 숨김 여부 처리
+      function nextTurn() {
+        clearHighlights();
+        const colors = playerColors.slice(0, selectedPlayerCount);
+        let idx = colors.indexOf(currentPlayer);
+        idx = (idx + 1) % colors.length;
+        currentPlayer = colors[idx];
+        phase = "move";
+        selectedStone = null;
+        movablePositions.clear();
+        statusMessage.innerText = `${colorNames[currentPlayer]}님의 턴입니다. 말을 선택하세요.`;
+
+        // breaker 버튼 표시 여부
+        document.getElementById("breaker-btn").style.display = breakerUsed[
+          currentPlayer
+        ]
+          ? "none"
+          : "inline-block";
+
+        setTimeout(() => checkGameOverAndCalculateScores(), 100);
+      }
+
+      function generateBoard() {
+        board.innerHTML = "";
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const cell = document.createElement("div");
+            cell.classList.add("cell");
+
+            if (r % 2 === 0 && c % 2 === 0) {
+              cell.classList.add("stone-cell");
+              cell.dataset.row = r;
+              cell.dataset.col = c;
+              cell.addEventListener("click", () => onStoneClick(cell, r, c));
+            } else if (r % 2 === 0 && c % 2 === 1) {
+              cell.classList.add("h-wall-cell");
+              cell.style.backgroundColor = "white";
+              cell.addEventListener("click", () => onStoneClick(cell, r, c));
+            } else if (r % 2 === 1 && c % 2 === 0) {
+              cell.classList.add("v-wall-cell");
+              cell.style.backgroundColor = "white";
+              cell.addEventListener("click", () => onStoneClick(cell, r, c));
+            } else {
+              cell.classList.add("empty-cell");
+            }
+
+            board.appendChild(cell);
+          }
+        }
+      }
+
+      function checkGameOverAndCalculateScores() {
+        const visited = new Set();
+        const scores = {};
+        playerColors.slice(0, selectedPlayerCount).forEach((color) => {
+          scores[color] = 0;
+        });
+
+        function bfs(startR, startC) {
+          const queue = [[startR, startC]];
+          const area = [];
+          const owners = new Set();
+
+          while (queue.length) {
+            const [r, c] = queue.shift();
+            const key = `${r},${c}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+            area.push([r, c]);
+            const cell = getCell(r, c);
+            const stone = cell.querySelector(".stone");
+            if (stone) {
+              owners.add(stone.style.backgroundColor);
+            }
+
+            const steps = [
+              [r - 2, c],
+              [r + 2, c],
+              [r, c - 2],
+              [r, c + 2],
+            ];
+
+            for (const [nr, nc] of steps) {
+              if (
+                nr < 0 ||
+                nr >= SIZE ||
+                nc < 0 ||
+                nc >= SIZE ||
+                visited.has(`${nr},${nc}`)
+              )
+                continue;
+              if (isWallBetween(r, c, nr, nc)) continue;
+              const nextCell = getCell(nr, nc);
+              if (nextCell.classList.contains("stone-cell")) {
+                queue.push([nr, nc]);
+              }
+            }
+          }
+
+          return { area, owners };
+        }
+
+        let allStonesControlled = true;
+
+        for (let r = 0; r < SIZE; r += 2) {
+          for (let c = 0; c < SIZE; c += 2) {
+            const key = `${r},${c}`;
+            const cell = getCell(r, c);
+            if (!visited.has(key) && cell.classList.contains("stone-cell")) {
+              const { area, owners } = bfs(r, c);
+              if (owners.size === 1) {
+                const owner = [...owners][0];
+                scores[owner] += area.length;
+              } else if (owners.size > 1) {
+                let allBlocked = true;
+                for (const [rr, cc] of area) {
+                  const areaCell = getCell(rr, cc);
+                  const s = areaCell.querySelector(".stone");
+                  if (s && getMovablePositions(rr, cc).size > 1) {
+                    allBlocked = false;
+                    break;
+                  }
+                }
+                if (!allBlocked) {
+                  allStonesControlled = false;
+                }
+              } else {
+                allStonesControlled = false;
+              }
+            }
+          }
+        }
+
+        if (allStonesControlled) {
+          let result = "게임 종료!\n";
+          for (const color in scores) {
+            result += `${color}: ${scores[color]}점\n`;
+          }
+          alert(result);
+        }
+      }
+
+      const breakerUsed = {
+        red: false,
+        blue: false,
+        yellow: false,
+        green: false,
+      };
+      let breakerMode = false;
+      let breakerSource = null;
+
+      function activateBreaker() {
+        if (breakerUsed[currentPlayer]) return;
+        breakerMode = true;
+        selectedStone = null;
+        movablePositions.clear();
+        clearHighlights();
+        statusMessage.innerText = `${colorNames[currentPlayer]}님, 벽을 부술 말을 선택하세요.`;
+      }
+
+      function highlightBreakerTargets(r, c) {
+        clearHighlights();
+        const directions = [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ];
+        directions.forEach(([dr, dc]) => {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) return;
+          const cell = getCell(nr, nc);
+          if (
+            (cell.classList.contains("h-wall-cell") ||
+              cell.classList.contains("v-wall-cell")) &&
+            cell.style.backgroundColor !== "white"
+          ) {
+            cell.classList.add("breaker-highlight");
+            cell.onclick = () => {
+              breakerUsed[currentPlayer] = true;
+              breakerMode = false;
+              breakerSource = null;
+              cell.style.backgroundColor = "white";
+              clearHighlights();
+              statusMessage.innerText = `${colorNames[currentPlayer]}님, 말을 이동하세요.`;
+            };
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
