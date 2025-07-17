@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>벽바둑</title>
-    <style>
+     <style>
       body {
         font-family: "맑은 고딕", sans-serif;
         text-align: center;
@@ -18,7 +18,7 @@
       #controls {
         margin: 15px;
       }
-     .player-btn {
+      .player-btn {
         padding: 10px 15px;
         margin: 0 5px;
         font-weight: bold;
@@ -39,7 +39,7 @@
       .green {
         background: green;
       }
-     .breaker-btn {
+      .breaker-btn {
         background: #555;
         color: white;
         font-weight: bold;
@@ -47,7 +47,7 @@
         margin-left: 10px;
         border-radius: 6px;
         cursor: pointer;
-      } 
+      }
       #board {
         display: grid;
         grid-template-columns: repeat(6, 50px 10px) 50px;
@@ -103,52 +103,6 @@
         color: #333;
         min-height: 1.4em;
       }
-
- 
-      /* 메인 메뉴 버튼 */
-      #mode-select button {
-        padding: 12px 24px;
-        margin: 8px;
-        font-weight: 700;
-        font-size: 1.1em;
-        border: none;
-        border-radius: 10px;
-        cursor: pointer;
-        color: white;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        box-shadow: 0 5px 12px rgba(118, 75, 162, 0.5);
-        transition: background 0.3s ease, box-shadow 0.3s ease,
-          transform 0.15s ease;
-        user-select: none;
-      }
-      #mode-select button:hover {
-        background: linear-gradient(135deg, #5a67d8, #6b46c1);
-        box-shadow: 0 7px 15px rgba(107, 70, 193, 0.7);
-        transform: translateY(-3px);
-      }
-      #mode-select button:active {
-        transform: translateY(-1px);
-      }
-
-      /* 플레이어 버튼, 벽 부수기, 홈으로 버튼 */
-      .player-btn,
-      #breaker-btn,
-      #home-btn {
-        padding: 10px 18px;
-        margin: 0 6px;
-        font-weight: 600;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        color: white;
-        background: linear-gradient(135deg, #4a90e2, #357abd);
-        box-shadow: 0 4px 8px rgba(53, 122, 189, 0.4);
-        transition: background 0.3s ease, box-shadow 0.3s ease,
-          transform 0.15s ease;
-        user-select: none;
-      }
-
-      /* 이하 색상별 배경, hover 효과 등은 앞서 드린 스타일과 동일 */
     </style>
   </head>
   <body>
